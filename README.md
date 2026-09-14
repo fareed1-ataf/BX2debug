@@ -87,3 +87,11 @@ When running the tool, you will see a real-time ANSI-colored dashboard:
 ## 📜 License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
+
+## 💖 Support & Donate
+
+This tool is open-source and actively maintained. If you find **BX2debug** or **BX2trace** useful in your malware analysis or research, consider supporting the development! 
+
+Your support helps keep the project alive, fuels new features (like Kernel-mode hooking in the future), and buys the developer some coffee. ☕
+
+*(Add your donation links here, e.g., BuyMeACoffee, PayPal, Crypto Wallets)*
