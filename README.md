@@ -1,97 +1,32 @@
-# BX2debug 🔬
+# BX2Debug - Advanced Dynamic Malware Analysis Logger
 
-**BX2debug** is an advanced, high-performance **Behavioral Malware Analysis CLI** tool. It is built directly on top of the powerful [BX2trace](https://pypi.org/project/BX2trace/) engine to provide real-time, deep visibility into malicious activities.
+`bx2debug` is a sophisticated reporting and data-enrichment layer built on top of the `bx2trace` dynamic analysis engine. It is designed to transform raw API hooks and memory dumps into clean, actionable, and analyst-friendly Threat Intelligence reports.
 
-Unlike standard debuggers, BX2debug is designed specifically for **automated malware analysis** and **stealth tracking**, allowing you to trace APIs, extract live strings from memory, and intercept network connections in real-time, all while evading anti-debugging techniques.
+## Features
 
----
+- **Executive Summary Generation:** Automatically derives a triage verdict (MALICIOUS, SUSPICIOUS, BENIGN) and highlights critical Key Findings (e.g., C2 domains, injected processes, encryption activity) at the very top of the report.
+- **Advanced String Classification:** Extracts strings directly from memory and dynamically categorizes them into actionable Indicators of Compromise (IOCs) such as:
+  - URLs & Domains
+  - Network Indicators (IP Addresses)
+  - Registry Keys
+  - File Paths
+  - Suspicious Commands (PowerShell, cmd, etc.)
+- **Noise Reduction & False-Positive Filtering:** 
+  - Automatically detects and discards x64 assembly prologue/epilogue artifacts (e.g., `UAWAVAUATWVSH`) from memory string dumps.
+  - Smartly differentiates between actual IP addresses and .NET/Windows assembly version numbers (e.g., `4.0.0.0` or `5.9.0.0`).
+  - Purges `DecodeError` trace failures to ensure report integrity.
+- **Cross-Referenced Network IOCs:** Links DNS queries (`DNS_LOOKUP`) to raw TLS payloads (`DATA_SENT`) to reconstruct full network context, and extracts domains directly from executed shell command arguments.
+- **Cryptographic Context:** Infers cryptographic key algorithms (e.g., AES, RSA PUBLICKEYBLOB) based on `CryptImportKey` blob sizes.
 
-## 🌟 Features
+## Project Structure
 
-- **🖥️ Live API Hooking:** Intercepts critical Windows APIs (e.g., CreateProcessW, connect, WSAConnect) dynamically via INT3 breakpoints.
-- **🧠 Dynamic Memory Scanning:** Periodically scans the target's RW/RWX memory pages to extract new strings, URLs, and IoCs in real-time.
-- **💣 Stealth Engine:** Automatically patches the PEB (BeingDebugged and NtGlobalFlag) to bypass anti-debugging protections.
-- **🕸️ Child Process Tracking:** Automatically attaches to and follows spawned child processes (e.g., Process Hollowing).
-- **📄 Structured JSON Reports:** Generates highly detailed JSON reports containing loaded DLLs, hooked events, extracted strings, and network connections.
-- **⚡ Pure Python:** No heavy C++ dependencies required, running entirely in Python using ctypes.
+- `main.py`: The entry point for the analysis wrapper.
+- `storage/json_logger.py`: The core reporting engine that builds the structured JSON report and Executive Summary in real-time.
+- `enrichment/string_classifier.py`: The regex-based heuristic engine for classifying raw memory strings.
+- `reports/`: Directory where the final `.json` analysis reports are saved (ignored by git).
 
----
+## Future Roadmap (Phase 3)
 
-## ⚙️ Requirements
-
-- Windows 10 / 11 (x64)
-- Python 3.11+
-- **Administrator Privileges** (Required for SeDebugPrivilege to monitor processes).
-
----
-
-## 📥 Installation
-
-First, you must install the core engine BX2trace from PyPI, and then you can run the tool.
-
-`ash
-# 1. Install the core library
-pip install BX2trace
-
-# 2. Clone the BX2debug tool repository
-git clone https://github.com/fareed1-ataf/BX2debug.git
-cd BX2debug
-
-# 3. Install requirements
-pip install -r requirements.txt
-`
-
----
-
-## 🚀 Usage
-
-You can run BX2debug directly from the command line against any executable.
-
-### Basic Analysis
-`ash
-python main.py -t "C:\path\to\malware.exe"
-`
-
-### Advanced Usage with Custom Report Path
-`ash
-python main.py -t "C:\path\to\malware.exe" -o reports\my_analysis_report.json
-`
-
-### Command Line Arguments
-- -t, --target: (Required) The path to the executable you want to analyze.
-- -o, --output: (Optional) The path to save the generated JSON report (defaults to 
-eports/report_<name>_<date>.json).
-
----
-
-## 📋 Example Output
-
-When running the tool, you will see a real-time ANSI-colored dashboard:
-
-`	ext
-============================================================
- [ BX2DEBUG - BEHAVIORAL ANALYSIS TOOL ] 
- Advanced Behavioral Malware Analysis CLI v1.0
-============================================================
-[*] Target Acquired: malware.exe
-[*] Engines launched. Monitoring behavioral activity...
-
-[+] [   DLL   ] Loaded: C:\Windows\System32\ntdll.dll @ 0x7ff9b4d10000
-[*] [ PROCESS ] Spawned: C:\Windows\System32\cmd.exe (PID: 14396)
-[!] [ API_CALL ] WSAConnect called -> 8.8.8.8:80 (PID: 14396)
-[>] [ MEM_STR ] Extracted: "http://malicious-c2.com/payload.bin" (PID: 14396)
-`
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## 💖 Support & Donate
-
-This tool is open-source and actively maintained. If you find **BX2debug** or **BX2trace** useful in your malware analysis or research, consider supporting the development! 
-
-Your support helps keep the project alive, fuels new features (like Kernel-mode hooking in the future), and buys the developer some coffee. ☕
-
-*(Add your donation links here, e.g., BuyMeACoffee, PayPal, Crypto Wallets)*
+The next phase of development focuses on accessibility and intelligence:
+1. **Graphical User Interface (GUI):** A modern, sleek desktop interface to select targets, configure trace options, and visualize the generated reports interactively.
+2. **AI Integration:** Integrating an AI assistant to automatically read the JSON reports and provide human-readable explanations of the malware's behavior, intent, and potential impact.

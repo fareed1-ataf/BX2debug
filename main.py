@@ -5,14 +5,18 @@ import signal
 import queue
 import time
 from datetime import datetime
+import ctypes
 
-# Adjusting path to allow module-style imports within the package
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Adjusting path to allow module-style imports within the package, prioritizing local bx2trace
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, os.path.join(parent_dir, "bx2trace"))
+sys.path.insert(1, parent_dir)
 
 from bx2debug.ui.console import ConsoleUI
 from bx2debug.storage.json_logger import JsonLogger
-from bx2debug.engine.runner import MalwareRunner
-from bx2trace.core.models import TraceMode
+from bx2debug.utils.path_manager import ReportPathManager
+from bx2trace import EngineConfig, TraceMode, TraceSession
 
 
 class BX2debugApp:
@@ -25,7 +29,7 @@ class BX2debugApp:
         self.args = args
         self.ui = ConsoleUI()
         self.logger = None
-        self.runner = None
+        self.session = None
 
         self.shutting_down = False
         self.stats = {
@@ -33,7 +37,7 @@ class BX2debugApp:
             "Security Alerts": 0,
             "Strings Extracted": 0,
             "DLLs Loaded": 0,
-            "Processes Tracked": 0
+            "Processes Tracked": 0,
         }
 
     def _signal_handler(self, sig, frame):
@@ -43,34 +47,44 @@ class BX2debugApp:
 
         self.shutting_down = True
         print("\n")
-        self.ui.print_warning("SIGINT received. Requesting graceful shutdown of all engines...")
+        self.ui.print_warning(
+            "SIGINT received. Requesting graceful shutdown of all engines..."
+        )
 
-        if self.runner:
-            self.runner.stop()
+        if self.session:
+            self.session.join()
 
     def run(self):
         self.ui.draw_banner()
 
         # 1. Initialize Logger (StateTracker)
-        self.logger = JsonLogger(self.args.target, mode="FULL_TRACE", output_path=self.args.out)
+        resolved_path = ReportPathManager.resolve(
+            os.path.basename(self.args.target),
+            self.args.out
+        )
+        self.logger = JsonLogger(
+            self.args.target, mode="FULL_TRACE", output_path=resolved_path
+        )
         self.ui.print_info(f"Target Acquired: {self.args.target}")
         self.ui.print_info(f"Live Report: {self.logger.output_path}")
 
-        # 2. Setup Runner
-        mode = TraceMode.FULL_TRACE
-        self.runner = MalwareRunner(
-            self.args.target,
+        # 2. Setup Config and Session
+        config = EngineConfig(
+            target_path=self.args.target,
+            mode=TraceMode.FULL_TRACE,
+            enable_stealth=True,  # Default to stealth for malware analysis
             cmd_args=self.args.args,
-            yara_rules=self.args.yara,
-            mode=mode
+            yara_rules_path=self.args.yara,
         )
+        self.session = TraceSession(config)
+        self.session.engine.load_defaults()
 
         # 3. Register Signal Handler
         signal.signal(signal.SIGINT, self._signal_handler)
 
         # 4. Start Engines
         try:
-            self.runner.start()
+            self.session.start()
             self.ui.print_info("Engines launched. Monitoring behavioral activity...")
         except Exception as e:
             self.ui.print_error(f"Startup Failure: {e}")
@@ -78,18 +92,14 @@ class BX2debugApp:
 
         # 5. Main Orchestration Loop
         try:
-            while self.runner.is_alive or not self.runner.event_queue.empty():
-                try:
-                    # Non-blocking get with short timeout to keep loop responsive
-                    event = self.runner.event_queue.get(timeout=0.2)
-                    self._process_event(event)
-                except queue.Empty:
-                    if self.shutting_down and not self.runner.is_alive:
+            while self.session.is_alive:
+                event = self.session.get_event()
+                if event is None:
+                    if self.shutting_down:
                         break
+                    time.sleep(0.05)
                     continue
-                except Exception:
-                    # Internal processing error, shouldn't stop the analysis
-                    pass
+                self._process_event(event)
         finally:
             self._cleanup()
 
@@ -98,13 +108,16 @@ class BX2debugApp:
         # 1. Update Stats
         self.stats["Total Events"] += 1
 
-        ecat = getattr(event, 'category', 'OTHER')
-        eact = getattr(event, 'action', 'EVENT')
-        sev = getattr(event, 'severity', 'INFO')
+        ecat = getattr(event, "category", "OTHER")
+        eact = getattr(event, "action", "EVENT")
+        sev = getattr(event, "severity", "INFO")
 
-        if hasattr(ecat, 'name'): ecat = ecat.name
-        if hasattr(eact, 'name'): eact = eact.name
-        if hasattr(sev, 'name'): sev = sev.name
+        if hasattr(ecat, "name"):
+            ecat = ecat.name
+        if hasattr(eact, "name"):
+            eact = eact.name
+        if hasattr(sev, "name"):
+            sev = sev.name
 
         if ecat == "SECURITY" or sev in ("HIGH", "CRITICAL"):
             self.stats["Security Alerts"] += 1
@@ -113,8 +126,8 @@ class BX2debugApp:
         elif ecat == "PROCESS" and eact == "CREATED":
             self.stats["Processes Tracked"] += 1
         elif eact == "STRING_FOUND":
-            payload = getattr(event, 'payload', {})
-            count = len(payload.get('strings', []))
+            payload = getattr(event, "payload", {})
+            count = len(payload.get("strings", []))
             self.stats["Strings Extracted"] += count
 
         # 2. Update In-Memory Report (EVERYTHING)
@@ -124,11 +137,24 @@ class BX2debugApp:
         # 3. Display to UI (FILTERED)
         self.ui.display_event(event)
 
+        # 4. Pass through Detector Engine and process alerts
+        alerts = self.session.engine.process(event)
+        for alert in alerts:
+            self._handle_alert(alert)
+
+    def _handle_alert(self, alert):
+        """Process and display any alerts generated by detectors safely."""
+        self.stats["Security Alerts"] += 1
+        self.stats["Total Events"] += 1
+        if self.logger:
+            self.logger.log(alert)
+        self.ui.display_event(alert)
+
     def _cleanup(self):
         """Final cleanup and summary."""
         self.ui.print_info("Analysis session terminating. Joining threads...")
-        if self.runner:
-            self.runner.join(timeout=3)
+        if self.session:
+            self.session.join()
 
         if self.logger:
             report_path = self.logger.save_report(self.args.out)
@@ -140,17 +166,19 @@ class BX2debugApp:
 
 
 def main():
-    # Force ANSI colors on Windows legacy CMD
-    if os.name == 'nt':
-        try:
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-        except Exception:
-            pass
+    if os.name != "nt":
+        print("Error: BX2debug currently only supports Windows.")
+        sys.exit(1)
 
-    if len(sys.argv) == 1:
+    # Force ANSI colors on Windows legacy CMD
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+    except Exception:
+        pass
+
+    # Show help immediately if no arguments or help is requested
+    if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
         ui = ConsoleUI()
         ui.draw_banner()
         help_text = f"""
@@ -174,12 +202,43 @@ def main():
         print(help_text)
         sys.exit(0)
 
-    parser = argparse.ArgumentParser(description="BX2debug - Advanced Behavioral Malware Analysis CLI", add_help=False)
-    parser.add_argument("-t", "--target", help="Path to the executable to analyze", required=True)
-    parser.add_argument("-a", "--args", help="Command line arguments for the target", default="")
-    parser.add_argument("-y", "--yara", help="Path to YARA rules file/directory", default=None)
-    parser.add_argument("-o", "--out", help="Custom path to save the JSON report", default=None)
-    parser.add_argument("-h", "--help", action="help", help="Show this help message and exit")
+    # Check for Administrator privileges ONLY if we are actually going to trace
+    def is_admin():
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except:
+            return False
+
+    if not is_admin():
+        print("[!] Administrator privileges are required to trace this process.")
+        print("[*] Prompting for UAC elevation...")
+        params = " ".join(
+            [f'"{arg}"' if " " in str(arg) else str(arg) for arg in sys.argv]
+        )
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, params, None, 1
+        )
+        sys.exit(0)
+
+    parser = argparse.ArgumentParser(
+        description="BX2debug - Advanced Behavioral Malware Analysis CLI",
+        add_help=False,
+    )
+    parser.add_argument(
+        "-t", "--target", help="Path to the executable to analyze", required=True
+    )
+    parser.add_argument(
+        "-a", "--args", help="Command line arguments for the target", default=""
+    )
+    parser.add_argument(
+        "-y", "--yara", help="Path to YARA rules file/directory", default=None
+    )
+    parser.add_argument(
+        "-o", "--out", help="Custom path to save the JSON report", default=None
+    )
+    parser.add_argument(
+        "-h", "--help", action="help", help="Show this help message and exit"
+    )
 
     args = parser.parse_args()
 
@@ -188,7 +247,14 @@ def main():
         sys.exit(1)
 
     app = BX2debugApp(args)
-    app.run()
+    try:
+        app.run()
+    finally:
+        print("\n[*] Analysis finished. Press ENTER to close the terminal...")
+        try:
+            input()
+        except (KeyboardInterrupt, EOFError):
+            pass
 
 
 if __name__ == "__main__":

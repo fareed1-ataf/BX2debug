@@ -1,0 +1,52 @@
+{
+    "Executive Summary": {
+        "Verdict": "UNKNOWN",
+        "Risk Level": "LOW",
+        "Key Findings": [
+            "No significant behavioral indicators detected."
+        ],
+        "Total Alerts": 0,
+        "Analysis Time": "2026-09-24 04:39:18"
+    },
+    "Analysis Metadata": {
+        "Target Name": "test.json",
+        "Target Path": "C:\\Users\\cssp\\Desktop\\D_folder\\tools\\Tools_env\\Fdebug\\bx2debug\\test.json",
+        "Analysis Start Time": "2026-09-24 04:39:18",
+        "Analysis End Time": "2026-09-24 04:39:18",
+        "Execution Mode": "<__main__.DummyUI object at 0x00000251AF6CB410>",
+        "Total Events Captured": 0
+    },
+    "Summary": {
+        "Network Connections": 0,
+        "Unique IPs": [],
+        "Unique Domains": [],
+        "Files Written": 0,
+        "Files Deleted": 0,
+        "Registry Modifications": 0,
+        "Processes Spawned": [],
+        "Security Alerts": 0,
+        "Strings Extracted": 0,
+        "Verdict": "UNKNOWN"
+    },
+    "Process Tree": [],
+    "Executed Scripts & Commands": {
+        "Shell Executions": [],
+        "Process Launches": [],
+        "COM Activations": []
+    },
+    "Loaded Modules (DLLs)": [],
+    "Security Alerts": [],
+    "Network Activity": [],
+    "Cryptographic Activity": {
+        "Keys Imported": 0,
+        "Encryption Calls": 0,
+        "Decryption Calls": 0,
+        "Crypto APIs Used": []
+    },
+    "Anti-Analysis Techniques": [],
+    "File System Activity": [],
+    "Registry Activity": [],
+    "Process & Injection Activity": [],
+    "Memory Analysis & Strings": {},
+    "Raw Captured Data": []
+}
