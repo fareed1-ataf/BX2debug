@@ -1,61 +1,99 @@
-# 🛡️ BX2Debug: Advanced Dynamic Malware Analysis & IOC Enrichment Engine
+<div align="center">
+  <h1>🛡️ BX2Debug</h1>
+  <p><strong>Advanced Dynamic Malware Analysis & IOC Enrichment Engine</strong></p>
 
-## 📖 Overview
+  <p>
+    <a href="https://github.com/fareed1-ataf/BX2debug/issues"><img alt="Issues" src="https://img.shields.io/github/issues/fareed1-ataf/BX2debug?color=blue&style=flat-square" /></a>
+    <a href="https://github.com/fareed1-ataf/BX2debug/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/fareed1-ataf/BX2debug?color=blue&style=flat-square" /></a>
+    <a href="https://github.com/fareed1-ataf/BX2debug/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/fareed1-ataf/BX2debug?color=blue&style=flat-square" /></a>
+    <a href="https://github.com/fareed1-ataf/BX2debug/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/fareed1-ataf/BX2debug?color=blue&style=flat-square" /></a>
+    <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3.11+-blue.svg?style=flat-square&logo=python" /></a>
+  </p>
+</div>
+
+<br />
+
+## 📑 Table of Contents
+- [About The Project](#-about-the-project)
+- [Key Features](#-key-features)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Understanding The Reports](#-understanding-the-reports)
+- [Architecture](#-architecture)
+- [Roadmap (Phase 3)](#-roadmap)
+- [License](#-license)
+
+---
+
+## 📖 About The Project
 
 **BX2Debug** is a sophisticated reporting and data-enrichment layer built on top of the `bx2trace` dynamic analysis engine. While raw API monitors generate massive amounts of unstructured, noisy data, BX2Debug acts as an intelligent funnel. It intercepts raw memory traces, API hooks, and network streams in real-time, processes them through a custom heuristic engine, and outputs a clean, actionable **Threat Intelligence Report** formatted in JSON.
 
-This tool is designed specifically for Malware Analysts and Security Researchers who need to quickly triage a suspicious executable without drowning in assembly code or raw hexadecimal dumps.
+This tool is designed specifically for **Malware Analysts** and **Security Researchers** who need to quickly triage suspicious executables without drowning in assembly code or raw hexadecimal dumps.
 
 ---
 
-## 🎯 The Problem & Our Solution
+## ✨ Key Features
 
-**The Problem:** Traditional dynamic analysis tools often output raw memory buffers, garbled strings, and unstructured API calls. Analysts spend hours manually filtering out false positives (like .NET assembly version numbers mistaken for IPs) or trying to correlate a DNS lookup with a subsequent encrypted network stream.
+### 🔍 Intelligent IOC Extraction
+- **Dynamic String Classification:** Automatically extracts memory strings and categorizes them into actionable buckets: `URLs`, `IPs`, `Registry Keys`, `File Paths`, and `Suspicious Commands`.
+- **Embedded URL Extraction:** Scans executed shell commands to extract hidden URLs, ensuring C2 domains passed via command-line arguments are captured.
 
-**The Solution:** BX2Debug automates the triage process. It intelligently filters out noise, cross-references related events, and instantly flags malicious behavior. The final output is an "Analyst-Ready" report that immediately highlights the most critical Indicators of Compromise (IOCs).
+### 🛡️ Advanced Noise Reduction
+- **Garbage Filtering:** Detects and discards x64 assembly artifacts (e.g., `UAWAVAUATWVSH`) that pollute raw memory dumps.
+- **False-Positive Mitigation:** Distinguishes between actual IPv4 addresses and Microsoft .NET assembly version numbers (e.g., `4.0.0.0`).
+- **API Failure Handling:** Sanitizes internal tracer failures (like `DecodeError`) so they do not bleed into the intelligence report.
 
----
+### 🌐 Contextual Network Correlation
+- Automatically tracks `DNS_LOOKUP` events and correlates them with subsequent `DATA_SENT` streams on the same socket to definitively identify TLS destinations.
 
-## ✨ Core Features
+### 🔐 Cryptographic Analysis
+- Monitors `CryptImportKey`, `BCryptEncrypt`, and `BCryptDecrypt`.
+- Dynamically infers the cryptographic key algorithm (e.g., `AES-256`, `RSA PUBLICKEYBLOB`) based on byte length.
 
-### 1. Intelligent IOC Extraction & Enrichment
-- **Dynamic String Classification:** Automatically extracts memory strings and uses advanced Regex patterns to categorize them into actionable buckets: `URLs`, `Network Indicators (IPs)`, `Registry Keys`, `File Paths`, and `Suspicious Commands` (e.g., PowerShell, cmd).
-- **Embedded URL Extraction:** Capable of scanning executed shell commands and process launch arguments to extract hidden URLs, ensuring that C2 domains passed via command-line arguments are always captured.
-
-### 2. Advanced Noise Reduction Engine
-- **Garbage Filtering:** Detects and discards x64 assembly prologue/epilogue artifacts (e.g., `UAWAVAUATWVSH`) that often pollute raw memory string dumps.
-- **False-Positive Mitigation:** Implements logic to distinguish between actual IPv4 network addresses and Microsoft .NET assembly version numbers (e.g., `4.0.0.0`, `13.0.0.0`), preventing report corruption.
-- **API Failure Handling:** Safely intercepts and sanitizes internal tracer failures (like `DecodeError`), ensuring they do not bleed into the final intelligence report.
-
-### 3. Contextual Network Correlation
-- **DNS to Payload Linking:** Automatically tracks `DNS_LOOKUP` events and correlates them with subsequent `DATA_SENT` streams on the same socket. This allows the tool to definitively state *where* encrypted TLS data is being sent.
-
-### 4. Cryptographic Activity Analysis
-- Monitors `CryptImportKey`, `BCryptEncrypt`, and `BCryptDecrypt` API calls.
-- Dynamically infers the type of cryptographic key being used (e.g., `AES-256`, `RSA PUBLICKEYBLOB`) based on the byte length of the imported key payload.
-
-### 5. Automated Triage & Executive Summary
-The system automatically assigns a risk level based on observed behavior:
+### ⚡ Automated Triage
+Assigns a risk level based on observed behavior:
 - 🔴 **MALICIOUS:** Process Injection, PE File Dropping, or Known C2 Connections.
 - 🟡 **SUSPICIOUS:** High volume of network connections, registry modifications, or anti-debug techniques.
-- 🟢 **BENIGN:** No significant security alerts triggered.
+- 🟢 **BENIGN:** No significant security alerts.
 
 ---
 
-## 🏗️ Project Architecture
+## 💻 Installation
 
-The tool is modular and designed for high performance:
+### Prerequisites
+- Python 3.11 or higher
+- Windows OS (Required for dynamic tracing capabilities)
 
-- `main.py`: The application entry point. Handles the target execution environment and initializes the logger.
-- `storage/json_logger.py`: The core tracking engine. Maintains state across the lifecycle of the malware execution, deduplicates events, links network contexts, and builds the final JSON report.
-- `enrichment/string_classifier.py`: The heuristic classification module. Contains the logic for categorizing strings and filtering out assembly garbage and false positives.
-- `reports/`: The directory where the structured `.json` intelligence reports are saved.
+### Setup
+1. Clone the repository:
+   ```cmd
+   git clone https://github.com/fareed1-ataf/BX2debug.git
+   cd BX2debug
+   ```
+2. Install required dependencies:
+   ```cmd
+   pip install -r requirements.txt
+   ```
 
 ---
 
-## 📊 Example Output (Executive Summary)
+## 🚀 Usage
 
-When a piece of malware is analyzed, BX2Debug generates a clear, prioritized summary at the very top of the report:
+Run the tool against any suspicious executable. The analysis engine will launch the target, attach the tracer, and generate a report in real-time.
+
+```cmd
+python main.py
+```
+*(Note: A target file prompt will appear, or you can modify `main.py` to accept CLI arguments in future updates).*
+
+Press `Ctrl+C` to cleanly detach the tracer and finalize the report.
+
+---
+
+## 📊 Understanding The Reports
+
+Reports are automatically saved in the `reports/` directory. Each report features an **Executive Summary** at the top for instant triage:
 
 ```json
 "Executive Summary": {
@@ -72,12 +110,33 @@ When a piece of malware is analyzed, BX2Debug generates a clear, prioritized sum
   "Analysis Time": "2026-09-24 05:01:04"
 }
 ```
+The report also contains detailed sections for:
+- Process Tree & Injections
+- File & Registry Activity
+- Cryptographic Operations
+- Full Memory String Analysis
 
 ---
 
-## 🚀 Future Roadmap (Phase 3)
+## 🏗️ Architecture
 
-The current version (Phase 2) successfully establishes a robust backend data pipeline. The next phase of development will focus on accessibility and advanced intelligence:
+The tool is highly modular:
+- `main.py`: Application entry point.
+- `storage/json_logger.py`: The core tracking engine. Maintains state, deduplicates events, links network contexts, and builds the JSON report.
+- `enrichment/string_classifier.py`: The heuristic classification module. Contains logic for categorizing strings and filtering out assembly garbage.
 
-1. **Graphical User Interface (GUI):** A sleek, modern desktop interface to allow analysts to select target executables, configure hooking options, and visualize the JSON reports through interactive dashboards and process trees.
-2. **AI Integration:** Integrating Large Language Models (LLMs) to automatically read the generated JSON reports and provide a human-readable, plain-English explanation of the malware's intent and potential impact.
+---
+
+## 🗺️ Roadmap
+
+We are currently in **Phase 2** (Data Enrichment & Pipeline Optimization). 
+
+**Upcoming in Phase 3:**
+- [ ] **Graphical User Interface (GUI):** A modern desktop interface for interactive report visualization and process tree graphs.
+- [ ] **AI Assistant Integration:** Integration with Large Language Models (LLMs) to automatically read JSON reports and provide plain-English malware analysis summaries.
+
+---
+
+## 📜 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
